@@ -5,7 +5,9 @@
 Airo simplifies deploying your side-projects from your local computer to a self-hosted server using Docker, Docker Compose, SSH and Caddyfile. 
 
 Airo helps you focus on building your product, not managing infrastructure. Kubernetes or a CI/CD pipeline are cool,
-but sometimes I just want to keep things simple in a single server.
+but sometimes I just want to keep things simple in a single server. 
+
+>  Managing a server is not that difficult, and for my side-projects is the best option. With Airo I've automated some steps as a proof of concept, and I'm really happy with the result. There are more processes that can be automated and added as a feature.
 
 ## Key features
 
@@ -26,9 +28,6 @@ First, the initial setup is done manually:
 
 Then, you can use the `airo deploy` command to deploy your project to your server every
 time you finish working on a feature.
-
-> You need to have a server running somewhere. It involves configuring some options manually right
-> now that I would like to automate.
 
 ## Installation
 
