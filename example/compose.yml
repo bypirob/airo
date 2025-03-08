@@ -1,0 +1,39 @@
+# Docker Compose configuration for deployment
+services:
+  # Database service
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=true  # Generates a random root password for security
+    ports:
+      - '3306:3306'  # Expose MySQL port
+    volumes:
+      - /opt/mysql/data:/var/lib/mysql  # Persist MySQL data
+
+  # Reverse proxy service
+  caddy:
+    image: caddy:2.8.4
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /opt/caddy/Caddyfile:/etc/caddy/Caddyfile   # Caddy configuration
+      - /opt/caddy/caddy_data:/data                 # Persist Caddy data
+      - /opt/caddy/caddy_config:/config             # Persist Caddy config
+      - /opt/caddy/logs:/logs                       # Store logs
+
+  # Frontend service
+  front:
+    container_name: front
+    image: your-registry/front:latest
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - /home/user/.env:/app/.env
+
+volumes:
+  mysql:
+    driver: local
