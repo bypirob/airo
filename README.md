@@ -2,7 +2,7 @@
 
 **Deploy your projects directly from your local computer to your production server easily.**
 
-Airo helps you deploying containers to your self-hosted server, without worrying about configuring pipelines, serverless or services. Just your servers.
+Airo helps you deploying containers to your self-hosted server, without worrying about configuring pipelines, serverless services or different platforms. Just your self-hosted servers.
 
 ## Why Airo?
 
