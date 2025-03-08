@@ -31,9 +31,78 @@ After this initial setup, deploying new updates is just a simple command away:
 airo deploy
 ```
 
-That's it—simple, repeatable, and hassle-free.
+## Installation
 
----
+### From Source
 
-**Stop dealing with deployment headaches. Deploy easily with Airo.**
+```bash
+git clone https://github.com/yourusername/airo.git
+cd airo
+make install
+airo deploy
+```
+
+## Usage
+
+1. Create a new project directory and navigate to it:
+   ```bash
+   mkdir my-project/.deploy
+   cd my-project/.deploy
+   ```
+
+2. Configure your `env.yaml` file:
+   ```yaml
+   server: your-server-ip
+   user: your-ssh-user
+   ssh_key: /path/to/your/ssh/key
+   # add all your services that will be built here
+   services:
+     - name: nextjs
+       image: your-registry/api:latest
+       build: /home/user/your-project
+   ```
+
+3. Add a Dockerfile to your project:
+    ```dockerfile
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY . .
+    RUN npm install
+    ```
+
+4. Configure your `compose.yml` file with your services:
+   ```yaml
+   services:
+      postgres:
+        image: postgres:latest
+        restart: unless-stopped
+        ports:
+          - '5432:5432'
+        volumes:
+          - ./postgres_data:/var/lib/postgresql/data
+        environment:
+          POSTGRES_PASSWORD: some-temporary-password
+     nextjs:
+       image: your-registry/front:latest
+       restart: unless-stopped
+       ports:
+         - '3000:3000'
+       volumes:
+         - ./.env:/app/.env
+   ```
+
+5. Deploy your project:
+   ```bash
+   airo deploy
+   ```
+
+6. If you want to deploy your project without building the docker image, you can use the `compose` subcommand:
+  ```bash
+  airo compose
+  ```
+
+7. Also if you want to update your Caddyfile, you can use the `caddy` subcommand:
+  ```bash
+  airo caddy
+  ```
 
