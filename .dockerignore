@@ -1,0 +1,7 @@
+example/
+.git/
+.gitignore
+.dockerignore
+.vscode/
+.idea/
+.DS_Store
