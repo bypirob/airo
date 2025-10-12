@@ -44,13 +44,34 @@ airo deploy
 
 ## Usage
 
+### Initial Server Setup
+
+If you have a fresh server that doesn't have Docker installed yet, you can use the `init` command to set everything up:
+
+```bash
+airo init
+```
+
+This command will:
+
+- Update all system packages
+- Install Docker and Docker Compose
+- Add your user to the docker group
+- Verify the installation
+
+**Note:** After running `init`, you may need to log out and back in to the server for docker group permissions to take effect.
+
+### Deploying Your Application
+
 1. Create a new project directory and navigate to it:
+
    ```bash
    mkdir my-project/.deploy
    cd my-project/.deploy
    ```
 
-2. Configure your `env.yaml` file:
+2. Configure your `env.yml` file:
+
    ```yaml
    server: your-server-ip
    user: your-ssh-user
@@ -63,14 +84,16 @@ airo deploy
    ```
 
 3. Add a Dockerfile to your project:
-    ```dockerfile
-    FROM node:20-alpine
-    WORKDIR /app
-    COPY . .
-    RUN npm install
-    ```
+
+   ```dockerfile
+   FROM node:20-alpine
+   WORKDIR /app
+   COPY . .
+   RUN npm install
+   ```
 
 4. Configure your `compose.yml` file with your services:
+
    ```yaml
    services:
       postgres:
@@ -96,13 +119,38 @@ airo deploy
    airo deploy
    ```
 
-6. If you want to deploy your project without building the docker image, you can use the `compose` subcommand:
+### Additional Commands
+
+- **Update compose configuration without building images:**
+
   ```bash
   airo compose
   ```
 
-7. Also if you want to update your Caddyfile, you can use the `caddy` subcommand:
+- **Update Caddyfile configuration:**
+
   ```bash
   airo caddy
   ```
 
+- **Initialize a fresh server (install Docker and updates):**
+  ```bash
+  airo init
+  ```
+
+### Custom Config Directory
+
+By default, Airo looks for config files (`env.yml`, `compose.yml`, `Caddyfile`) in the current directory. You can specify a different directory using the `--config` flag:
+
+```bash
+airo deploy --config /path/to/config/directory
+airo compose --config ./my-project/.deploy
+airo caddy --config ../configs
+airo init --config ./server-configs
+```
+
+This is useful when:
+
+- You have multiple deployment configurations
+- Your config files are in a different directory
+- You want to organize your deployment files separately

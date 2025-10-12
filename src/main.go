@@ -1,10 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -13,7 +15,9 @@ import (
 )
 
 func main() {
-	commands := []string{"deploy", "compose", "caddy"}
+	configDir := flag.String("config", ".", "Path to config directory (default: current directory)")
+
+	commands := []string{"init", "deploy", "compose", "caddy"}
 	if len(os.Args) < 2 {
 		fmt.Println("Expected subcommand: ", strings.Join(commands, ", "))
 		os.Exit(1)
@@ -24,10 +28,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	envFile := "./env.yml"
+	flag.CommandLine.Parse(os.Args[2:])
+
+	envFile := filepath.Join(*configDir, "env.yml")
 
 	config := lib.ReadConfig(envFile)
-	fmt.Printf("Config: %+v\n", config)
+	fmt.Printf("✅ Config loaded successfully\n")
 
 	server := config.Server
 
@@ -43,14 +49,11 @@ func main() {
 
 	defer client.Close()
 
-	if err != nil {
-		fmt.Printf("Error initializing SSH client: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("SSH client initialized successfully")
+	fmt.Println("✅ SSH client initialized successfully")
 
 	switch os.Args[1] {
+	case "init":
+		initializeServer(client)
 	case "deploy":
 		serviceNames := []string{}
 		for _, service := range config.Services {
@@ -60,11 +63,11 @@ func main() {
 			serviceNames = append(serviceNames, service.Name)
 		}
 
-		copyComposeAndRun(client, serviceNames, config.User)
+		copyComposeAndRun(client, serviceNames, config.User, *configDir)
 	case "compose":
-		copyComposeAndRun(client, []string{}, config.User)
+		copyComposeAndRun(client, []string{}, config.User, *configDir)
 	case "caddy":
-		copyCaddyfileAndReload(client)
+		copyCaddyfileAndReload(client, *configDir)
 	default:
 		fmt.Println("Unknown subcommand")
 		os.Exit(1)
@@ -105,9 +108,10 @@ func pullDockerImage(client *goph.Client, tag string) {
 	fmt.Println("Docker image pull successfully")
 }
 
-func copyComposeAndRun(client *goph.Client, services []string, user string) {
+func copyComposeAndRun(client *goph.Client, services []string, user string, configDir string) {
 	fmt.Println("Copying compose file")
-	err := client.Upload("./compose.yml", "/home/"+user+"/compose.yml")
+	composeFile := filepath.Join(configDir, "compose.yml")
+	err := client.Upload(composeFile, "/home/"+user+"/compose.yml")
 	if err != nil {
 		fmt.Printf("Error copying compose file: %v\n", err)
 		os.Exit(1)
@@ -122,7 +126,71 @@ func copyComposeAndRun(client *goph.Client, services []string, user string) {
 	fmt.Println("Compose file copied and ran successfully")
 }
 
-func copyCaddyfileAndReload(client *goph.Client) {
-	client.Upload("./Caddyfile", "/opt/caddy/Caddyfile")
+func copyCaddyfileAndReload(client *goph.Client, configDir string) {
+	caddyFile := filepath.Join(configDir, "Caddyfile")
+	client.Upload(caddyFile, "/opt/caddy/Caddyfile")
 	client.Run("docker exec caddy caddy reload --config /etc/caddy/Caddyfile")
+}
+
+func initializeServer(client *goph.Client) error {
+	fmt.Println("=== Starting server initialization ===")
+
+	fmt.Println("\n[1/6] Updating package lists...")
+	out, err := client.Run("sudo apt-get update")
+	if err != nil {
+		return fmt.Errorf("error updating package lists: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ Package lists updated")
+
+	fmt.Println("\n[2/6] Upgrading existing packages (this may take a while)...")
+	out, err = client.Run("sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y")
+	if err != nil {
+		return fmt.Errorf("error upgrading packages: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ Packages upgraded")
+
+	fmt.Println("\n[3/6] Installing prerequisites...")
+	out, err = client.Run("sudo apt-get install -y ca-certificates curl gnupg lsb-release")
+	if err != nil {
+		return fmt.Errorf("error installing prerequisites: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ Prerequisites installed")
+
+	fmt.Println("\n[4/6] Installing Docker (this may take a while)...")
+	dockerInstallScript := `
+		# Add Docker's official GPG key
+		sudo install -m 0755 -d /etc/apt/keyrings
+		curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+		sudo chmod a+r /etc/apt/keyrings/docker.gpg
+		
+		# Set up Docker repository
+		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+		
+		# Install Docker
+		sudo apt-get update
+		sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+	`
+	out, err = client.Run(dockerInstallScript)
+	if err != nil {
+		return fmt.Errorf("error installing Docker: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ Docker installed")
+
+	fmt.Println("\n[5/6] Adding user to docker group...")
+	out, err = client.Run("sudo usermod -aG docker $USER")
+	if err != nil {
+		return fmt.Errorf("error adding user to docker group: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ User added to docker group")
+
+	fmt.Println("\n[6/6] Verifying Docker installation...")
+	out, err = client.Run("sudo docker --version && sudo docker compose version")
+	if err != nil {
+		return fmt.Errorf("error verifying Docker installation: %w\n%s", err, string(out))
+	}
+	fmt.Printf("✓ Docker verified:\n%s\n", string(out))
+
+	fmt.Println("\n=== Server initialization complete! ===")
+	fmt.Println("\nNote: You may need to log out and back in for docker group permissions to take effect.")
+	return nil
 }
