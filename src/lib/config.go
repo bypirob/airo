@@ -14,10 +14,11 @@ type Service struct {
 }
 
 type Config struct {
-	Services []Service `yaml:"services"`
-	Server   string    `yaml:"server"`
-	User     string    `yaml:"user"`
-	SshKey   string    `yaml:"ssh_key"`
+	Services  []Service `yaml:"services"`
+	Server    string    `yaml:"server"`
+	User      string    `yaml:"user"`
+	SshKey    string    `yaml:"ssh_key"`
+	Transport string    `yaml:"transport"`
 }
 
 func ReadConfig(file string) Config {
@@ -32,6 +33,10 @@ func ReadConfig(file string) Config {
 	if err != nil {
 		fmt.Printf("Error parsing config file: %v\n", err)
 		os.Exit(1)
+	}
+
+	if config.Transport == "" {
+		config.Transport = "registry"
 	}
 
 	return config

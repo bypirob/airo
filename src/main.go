@@ -58,8 +58,15 @@ func main() {
 		serviceNames := []string{}
 		for _, service := range config.Services {
 			buildDockerImage(service.Build, service.Image)
-			pushDockerImage(service.Image)
-			pullDockerImage(client, service.Image)
+			if config.Transport == "copy" {
+				if err := copyImageViaSSH(client, service.Image, config.SshKey, config.User, config.Server); err != nil {
+					fmt.Printf("Error copying image via SSH: %v\n", err)
+					os.Exit(1)
+				}
+			} else {
+				pushDockerImage(service.Image)
+				pullDockerImage(client, service.Image)
+			}
 			serviceNames = append(serviceNames, service.Name)
 		}
 
@@ -111,7 +118,11 @@ func pullDockerImage(client *goph.Client, tag string) {
 func copyComposeAndRun(client *goph.Client, services []string, user string, configDir string) {
 	fmt.Println("Copying compose file")
 	composeFile := filepath.Join(configDir, "compose.yml")
-	err := client.Upload(composeFile, "/home/"+user+"/compose.yml")
+	path := "/home/" + user + "/compose.yml"
+	if user == "root" {
+		path = "/root/compose.yml"
+	}
+	err := client.Upload(composeFile, path)
 	if err != nil {
 		fmt.Printf("Error copying compose file: %v\n", err)
 		os.Exit(1)
@@ -192,5 +203,46 @@ func initializeServer(client *goph.Client) error {
 
 	fmt.Println("\n=== Server initialization complete! ===")
 	fmt.Println("\nNote: You may need to log out and back in for docker group permissions to take effect.")
+	return nil
+}
+
+func copyImageViaSSH(client *goph.Client, tag string, sshKey string, user string, server string) error {
+	fmt.Printf("Copying image %s via SCP...\n", tag)
+
+	// 1. Save image to disk
+	localTar := "/tmp/" + strings.ReplaceAll(tag, "/", "_") + ".tar"
+	fmt.Printf("Saving image to %s...\n", localTar)
+
+	saveCmd := exec.Command("docker", "save", "-o", localTar, tag)
+	saveCmd.Stdout = os.Stdout
+	saveCmd.Stderr = os.Stderr
+	if err := saveCmd.Run(); err != nil {
+		return fmt.Errorf("failed to save image: %w", err)
+	}
+	defer os.Remove(localTar) // Clean up local tar file
+
+	fmt.Println("Image saved successfully")
+
+	// 2. Copy to server using SCP
+	remoteTar := "/tmp/" + filepath.Base(localTar)
+
+	fmt.Printf("Copying to server via SCP...\n")
+	scpCmd := exec.Command("scp", "-i", sshKey, localTar, user+"@"+server+":"+remoteTar)
+	scpCmd.Stdout = os.Stdout
+	scpCmd.Stderr = os.Stderr
+	if err := scpCmd.Run(); err != nil {
+		return fmt.Errorf("failed to copy image via SCP: %w", err)
+	}
+
+	fmt.Println("Image copied to server successfully")
+
+	// 3. Load image on server
+	fmt.Println("Loading image on server...")
+	_, err := client.Run("docker load -i " + remoteTar + " && rm " + remoteTar)
+	if err != nil {
+		return fmt.Errorf("failed to load image on server: %w", err)
+	}
+
+	fmt.Printf("Image %s loaded successfully on server\n", tag)
 	return nil
 }

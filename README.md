@@ -11,7 +11,7 @@ Deploying side-projects doesn't have to be complicated or expensive. Kubernetes,
 I want to automate this process and deploy easily to my own server. That's why I've created **Airo**:
 
 - 🚀 **Focus on building your product**, not managing infrastructure.
-- 🐳 **Build and push Docker images directly from your local machine to a container registry**.
+- 🐳 **Build and deliver Docker images via a registry or direct copy**.
 - ⚡️ **Deploy instantly** with a single command from your computer.
 - 🔑 **Easily update configurations and containers securely** using SSH.
 - 🌐 **Set up HTTPS and reverse proxy automatically** using Caddy.
@@ -21,7 +21,7 @@ I want to automate this process and deploy easily to my own server. That's why I
 Deploying with Airo is easy:
 
 1. Define your services in a `compose.yml` file.
-2. Configure your deployment details in `env.yml` (server details, Docker images, etc.).
+2. Configure your deployment details in `env.yml` (server details, Docker images, transport, etc.).
 3. Prepare your Dockerfile.
 4. Set up your Caddyfile for automatic HTTPS and reverse proxy.
 
@@ -73,6 +73,8 @@ This command will:
 2. Configure your `env.yml` file:
 
    ```yaml
+   # Image delivery method: "registry" (default) or "copy"
+   transport: registry
    server: your-server-ip
    user: your-ssh-user
    ssh_key: /path/to/your/ssh/key
@@ -118,6 +120,17 @@ This command will:
    ```bash
    airo deploy
    ```
+
+### Image Transport Modes
+
+- Registry (default): builds locally, pushes to your registry, and pulls on the server.
+- Copy: builds locally, saves as tar, uploads over SSH, and loads on the server.
+
+To use copy mode, set in `env.yml`:
+
+```yaml
+transport: copy
+```
 
 ### Additional Commands
 
