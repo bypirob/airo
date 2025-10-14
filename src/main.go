@@ -14,10 +14,16 @@ import (
 	"github.com/melbahja/goph"
 )
 
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
 func main() {
 	configDir := flag.String("config", ".", "Path to config directory (default: current directory)")
 
-	commands := []string{"init", "deploy", "compose", "caddy"}
+	commands := []string{"init", "deploy", "compose", "caddy", "version"}
 	if len(os.Args) < 2 {
 		fmt.Println("Expected subcommand: ", strings.Join(commands, ", "))
 		os.Exit(1)
@@ -26,6 +32,12 @@ func main() {
 	if !slices.Contains(commands, os.Args[1]) {
 		fmt.Println("Expected subcommand: ", strings.Join(commands, ", "))
 		os.Exit(1)
+	}
+
+	// Handle version command early (doesn't need config or SSH)
+	if os.Args[1] == "version" {
+		printVersion()
+		return
 	}
 
 	flag.CommandLine.Parse(os.Args[2:])
@@ -42,7 +54,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client, err := goph.New(config.User, server, auth)
+	command := os.Args[1]
+	user := config.User
+	if command == "init" {
+		user = "root"
+	}
+	client, err := goph.New(user, server, auth)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,9 +68,9 @@ func main() {
 
 	fmt.Println("✅ SSH client initialized successfully")
 
-	switch os.Args[1] {
+	switch command {
 	case "init":
-		initializeServer(client)
+		initializeServer(client, config)
 	case "deploy":
 		serviceNames := []string{}
 		for _, service := range config.Services {
@@ -79,6 +96,12 @@ func main() {
 		fmt.Println("Unknown subcommand")
 		os.Exit(1)
 	}
+}
+
+func printVersion() {
+	fmt.Printf("Airo version %s\n", version)
+	fmt.Printf("  commit: %s\n", commit)
+	fmt.Printf("  built: %s\n", buildDate)
 }
 
 func buildDockerImage(folder string, tag string) {
@@ -116,7 +139,7 @@ func pullDockerImage(client *goph.Client, tag string) {
 }
 
 func copyComposeAndRun(client *goph.Client, services []string, user string, configDir string) {
-	fmt.Println("Copying compose file")
+	fmt.Println("🔄 Copying compose file")
 	composeFile := filepath.Join(configDir, "compose.yml")
 	path := "/home/" + user + "/compose.yml"
 	if user == "root" {
@@ -134,40 +157,50 @@ func copyComposeAndRun(client *goph.Client, services []string, user string, conf
 		fmt.Println(string(out))
 		os.Exit(1)
 	}
-	fmt.Println("Compose file copied and ran successfully")
+	fmt.Println("✅ Compose file copied and ran successfully")
 }
 
 func copyCaddyfileAndReload(client *goph.Client, configDir string) {
 	caddyFile := filepath.Join(configDir, "Caddyfile")
-	client.Upload(caddyFile, "/opt/caddy/Caddyfile")
-	client.Run("docker exec caddy caddy reload --config /etc/caddy/Caddyfile")
+	err := client.Upload(caddyFile, "/opt/caddy/Caddyfile")
+	if err != nil {
+		fmt.Printf("Error copying Caddyfile: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("✅ Caddyfile copied successfully")
+	_, err = client.Run("docker exec caddy caddy reload --config /etc/caddy/Caddyfile")
+	if err != nil {
+		fmt.Printf("Error reloading Caddyfile: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("✅ Caddyfile reloaded successfully")
 }
 
-func initializeServer(client *goph.Client) error {
+func initializeServer(client *goph.Client, config lib.Config) error {
 	fmt.Println("=== Starting server initialization ===")
 
-	fmt.Println("\n[1/6] Updating package lists...")
+	fmt.Println("\nUpdating package lists...")
 	out, err := client.Run("sudo apt-get update")
 	if err != nil {
 		return fmt.Errorf("error updating package lists: %w\n%s", err, string(out))
 	}
 	fmt.Println("✓ Package lists updated")
 
-	fmt.Println("\n[2/6] Upgrading existing packages (this may take a while)...")
+	fmt.Println("\nUpgrading existing packages (this may take a while)...")
 	out, err = client.Run("sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y")
 	if err != nil {
 		return fmt.Errorf("error upgrading packages: %w\n%s", err, string(out))
 	}
 	fmt.Println("✓ Packages upgraded")
 
-	fmt.Println("\n[3/6] Installing prerequisites...")
+	fmt.Println("\nInstalling prerequisites...")
 	out, err = client.Run("sudo apt-get install -y ca-certificates curl gnupg lsb-release")
 	if err != nil {
 		return fmt.Errorf("error installing prerequisites: %w\n%s", err, string(out))
 	}
 	fmt.Println("✓ Prerequisites installed")
 
-	fmt.Println("\n[4/6] Installing Docker (this may take a while)...")
+	fmt.Println("\nInstalling Docker (this may take a while)...")
 	dockerInstallScript := `
 		# Add Docker's official GPG key
 		sudo install -m 0755 -d /etc/apt/keyrings
@@ -187,14 +220,50 @@ func initializeServer(client *goph.Client) error {
 	}
 	fmt.Println("✓ Docker installed")
 
-	fmt.Println("\n[5/6] Adding user to docker group...")
-	out, err = client.Run("sudo usermod -aG docker $USER")
+	fmt.Println("\nCreating deployment user...")
+	createUserScript := fmt.Sprintf(`
+		# Check if user exists
+		if id "%s" &>/dev/null; then
+			echo "User %s already exists"
+		else
+			# Create user with home directory
+			sudo useradd -m -s /bin/bash %s
+			echo "User %s created successfully"
+		fi
+		mkdir -p /opt/caddy
+		chown -R %s:%s /opt/caddy
+	`, config.User, config.User, config.User, config.User, config.User, config.User)
+	out, err = client.Run(createUserScript)
 	if err != nil {
-		return fmt.Errorf("error adding user to docker group: %w\n%s", err, string(out))
+		return fmt.Errorf("error creating deployment user: %w\n%s", err, string(out))
 	}
-	fmt.Println("✓ User added to docker group")
+	fmt.Printf("✓ Deployment user '%s' ready\n", config.User)
 
-	fmt.Println("\n[6/6] Verifying Docker installation...")
+	fmt.Println("\nAdding users to docker group...")
+	out, err = client.Run(fmt.Sprintf("sudo usermod -aG docker $USER && sudo usermod -aG docker %s", config.User))
+	if err != nil {
+		return fmt.Errorf("error adding users to docker group: %w\n%s", err, string(out))
+	}
+	fmt.Println("✓ Users added to docker group")
+
+	fmt.Println("\nCopying SSH authorized keys to deployment user...")
+	copyKeysScript := fmt.Sprintf(`
+		# Create .ssh directory for the new user
+		sudo mkdir -p /home/%s/.ssh
+		# Copy root's authorized_keys to the new user
+		sudo cp /root/.ssh/authorized_keys /home/%s/.ssh/authorized_keys
+		# Set proper ownership and permissions
+		sudo chown -R %s:%s /home/%s/.ssh
+		sudo chmod 700 /home/%s/.ssh
+		sudo chmod 600 /home/%s/.ssh/authorized_keys
+	`, config.User, config.User, config.User, config.User, config.User, config.User, config.User)
+	out, err = client.Run(copyKeysScript)
+	if err != nil {
+		return fmt.Errorf("error copying SSH keys: %w\n%s", err, string(out))
+	}
+	fmt.Printf("✓ SSH keys copied to '%s'\n", config.User)
+
+	fmt.Println("\nVerifying Docker installation...")
 	out, err = client.Run("sudo docker --version && sudo docker compose version")
 	if err != nil {
 		return fmt.Errorf("error verifying Docker installation: %w\n%s", err, string(out))

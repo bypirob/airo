@@ -39,5 +39,9 @@ func ReadConfig(file string) Config {
 		config.Transport = "registry"
 	}
 
+	if config.User == "" {
+		config.User = "airo"
+	}
+
 	return config
 }

@@ -8,11 +8,22 @@ GOBIN=$(GOBASE)/bin
 # Installation paths
 INSTALL_PATH=/usr/local/bin
 
+# Version information
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+BUILD_DATE ?= $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+# Linker flags to inject version info
+LDFLAGS=-ldflags "-X 'main.version=$(VERSION)' -X 'main.commit=$(COMMIT)' -X 'main.buildDate=$(BUILD_DATE)'"
+
 all: build install
 
 build:
 	@echo "Building Airo..."
-	@go build -o $(GOBIN)/$(BINARY_NAME) ./src/main.go
+	@echo "Version: $(VERSION)"
+	@echo "Commit: $(COMMIT)"
+	@echo "Build Date: $(BUILD_DATE)"
+	@go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./src/main.go
 
 install: build
 	@echo "Installing Airo to $(INSTALL_PATH)..."
