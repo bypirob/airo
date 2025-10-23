@@ -72,8 +72,38 @@ func main() {
 	case "init":
 		initializeServer(client, config)
 	case "deploy":
+		serviceToDeploy := "all"
+		remainingArgs := flag.Args()
+		if len(remainingArgs) > 0 {
+			serviceToDeploy = remainingArgs[0]
+		}
+
 		serviceNames := []string{}
-		for _, service := range config.Services {
+		servicesToDeploy := config.Services
+
+		if serviceToDeploy != "all" {
+			found := false
+			for _, service := range config.Services {
+				if service.Name == serviceToDeploy {
+					servicesToDeploy = []lib.Service{service}
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("Error: service '%s' not found in config\n", serviceToDeploy)
+				fmt.Println("Available services:")
+				for _, service := range config.Services {
+					fmt.Printf("  - %s\n", service.Name)
+				}
+				os.Exit(1)
+			}
+			fmt.Printf("🚀 Deploying service: %s\n", serviceToDeploy)
+		} else {
+			fmt.Printf("🚀 Deploying all services\n")
+		}
+
+		for _, service := range servicesToDeploy {
 			buildDockerImage(service.Build, service.Image)
 			if config.Transport == "copy" {
 				if err := copyImageViaSSH(client, service.Image, config.SshKey, config.User, config.Server); err != nil {

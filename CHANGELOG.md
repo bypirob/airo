@@ -11,3 +11,4 @@ All notable changes to this project will be documented in this file.
 - `version` subcommand to print version, commit, and build date.
 - Embedded build metadata via Makefile ldflags (version, commit, build date).
 - Default config values: `transport: registry` and `user: airo` when omitted.
+- Service selection in `deploy` command: pass service name as argument to deploy individual services, or omit for all services.
