@@ -27,9 +27,10 @@ func Deploy(cfg config.Config, tag string) error {
 	}
 	runArgs = append(runArgs, tag)
 
+	stopCmd := shellJoin([]string{"docker", "stop", cfg.Name})
 	removeCmd := shellJoin([]string{"docker", "rm", "-f", cfg.Name})
 	runCmd := shellJoin(runArgs)
-	remoteCmd := fmt.Sprintf("%s >/dev/null 2>&1 || true; %s", removeCmd, runCmd)
+	remoteCmd := fmt.Sprintf("%s >/dev/null 2>&1 || true; %s >/dev/null 2>&1 || true; %s", stopCmd, removeCmd, runCmd)
 
 	sshCmd := sshCommand(cfg, "sh", "-c", remoteCmd)
 	sshCmd.Stdout = os.Stdout
