@@ -1,0 +1,19 @@
+name: airo
+container:
+  target_arch: linux/amd64
+deploy:
+  port: 3000
+  app_port: 3000
+  env_file: "/etc/airo/app.env"
+  networks:
+    - "frontend"
+    - "backend"
+  type: ssh
+  ssh:
+    host: "192.168.1.100"
+    user: "admin"
+    port: 22
+    identity_file: "~/.ssh/id_rsa"
+  registry:
+    registry_url: "registry.example.com"
+    repository: "my-app"

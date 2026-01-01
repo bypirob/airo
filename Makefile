@@ -6,7 +6,7 @@ GOBASE=$(shell pwd)
 GOBIN=$(GOBASE)/bin
 
 # Installation paths
-INSTALL_PATH=/usr/local/bin
+INSTALL_PATH=~/.local/bin
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -23,11 +23,12 @@ build:
 	@echo "Version: $(VERSION)"
 	@echo "Commit: $(COMMIT)"
 	@echo "Build Date: $(BUILD_DATE)"
-	@go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./src/main.go
+	@go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./src/cmd/airo
+	@echo "Build complete! Binary located at $(GOBIN)/$(BINARY_NAME)"
 
 install: build
 	@echo "Installing Airo to $(INSTALL_PATH)..."
-	@sudo cp $(GOBIN)/$(BINARY_NAME) $(INSTALL_PATH)
+	@cp $(GOBIN)/$(BINARY_NAME) $(INSTALL_PATH)
 	@echo "Installation complete! Run 'airo --help' to get started"
 
 clean:
