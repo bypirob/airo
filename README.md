@@ -27,20 +27,26 @@ make install
 
 ## Usage
 
+`airo release` builds, pushes, and deploys in one step, and generates a tag suffix automatically when `--tag` is omitted.
+
 ### Configure airo.yaml
 
 ```yaml
-name: airo
-container:
-  target_arch: linux/amd64
-  port: 3000
-  app_port: 3000
+images:
+  app:
+    base_image: node:24-alpine
+    target_arch: linux/amd64
 deploy:
   type: ssh # or registry
-  env_file: "/etc/airo/app.env"
-  networks:
-    - "frontend"
-    - "backend"
+  containers:
+    - name: "app"
+      image: "app"
+      port: 3000
+      app_port: 3000
+      env_file: "/etc/airo/app.env"
+      networks:
+        - "frontend"
+        - "backend"
   ssh:
     host: "192.168.1.100"
     user: "admin"
@@ -54,13 +60,13 @@ deploy:
 ### Commands
 
 ```bash
-airo build --tag airo:dev --context .
-airo push --tag airo:dev
-airo deploy --tag airo:dev
+airo build --tag dev --context .
+airo push dev
+airo deploy --tag dev
 airo status
 airo tags
 airo tags --remote
-airo release --tag airo:dev --context .
+airo release --tag dev --context .
 airo version
 ```
 
