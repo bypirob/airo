@@ -31,7 +31,7 @@ var buildCmd = &cobra.Command{
 }
 
 func init() {
-	buildCmd.Flags().StringVar(&buildTag, "tag", "", "image tag (default: <name>:<yyyymmdd-hhmm>-<shortsha>)")
+	buildCmd.Flags().StringVar(&buildTag, "tag", "", "image tag suffix (default: <yyyymmdd-hhmm>-<shortsha>)")
 	buildCmd.Flags().StringVar(&buildContext, "context", ".", "build context path")
 	rootCmd.AddCommand(buildCmd)
 }

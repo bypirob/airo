@@ -30,27 +30,26 @@ func localTags(cfg config.Config) ([]string, error) {
 		return nil, fmt.Errorf("docker images: %w", err)
 	}
 
-	repoPrefix := cfg.Name + ":"
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	tags := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if line == "" || !strings.HasPrefix(line, repoPrefix) {
-			continue
+	for name := range cfg.Images {
+		repoPrefix := fmt.Sprintf("%s:", name)
+		for _, line := range lines {
+			if line == "" || !strings.HasPrefix(line, repoPrefix) {
+				continue
+			}
+			tag := strings.TrimPrefix(line, repoPrefix)
+			if tag == "" || tag == "<none>" {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s:%s", name, tag))
 		}
-		tag := strings.TrimPrefix(line, repoPrefix)
-		if tag == "" || tag == "<none>" {
-			continue
-		}
-		tags = append(tags, tag)
 	}
 
 	return tags, nil
 }
 
 func remoteTags(cfg config.Config) ([]string, error) {
-	if cfg.Deploy.Registry.Repository == "" {
-		return nil, fmt.Errorf("deploy.registry.repository is required for remote tags")
-	}
 	if cfg.Deploy.Registry.RegistryURL == "" {
 		return nil, fmt.Errorf("deploy.registry.registry_url is required for remote tags")
 	}
@@ -60,8 +59,8 @@ func remoteTags(cfg config.Config) ([]string, error) {
 		base = "https://" + base
 	}
 
-	url := fmt.Sprintf("%s/v2/%s/tags/list", base, cfg.Deploy.Registry.Repository)
 	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("%s/v2/%s/tags/list", base, cfg.Deploy.Registry.Repository)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("fetch tags: %w", err)
@@ -77,5 +76,16 @@ func remoteTags(cfg config.Config) ([]string, error) {
 		return nil, fmt.Errorf("parse tags response: %w", err)
 	}
 
-	return result.Tags, nil
+	tags := make([]string, 0)
+	for name := range cfg.Images {
+		prefix := name + "-"
+		for _, tag := range result.Tags {
+			if !strings.HasPrefix(tag, prefix) {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s:%s", name, strings.TrimPrefix(tag, prefix)))
+		}
+	}
+
+	return tags, nil
 }

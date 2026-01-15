@@ -25,7 +25,7 @@ var releaseCmd = &cobra.Command{
 			return fmt.Errorf("deploy.type must be ssh for release")
 		}
 		if releaseTag == "" {
-			defaultTag, err := docker.DefaultTag(cfg, projectPath)
+			defaultTag, err := docker.DefaultTagSuffix(projectPath)
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,7 @@ var releaseCmd = &cobra.Command{
 }
 
 func init() {
-	releaseCmd.Flags().StringVar(&releaseTag, "tag", "", "image tag (default: <name>:<yyyymmdd-hhmm>-<shortsha>)")
+	releaseCmd.Flags().StringVar(&releaseTag, "tag", "", "image tag suffix (default: <yyyymmdd-hhmm>-<shortsha>)")
 	releaseCmd.Flags().StringVar(&releaseContext, "context", ".", "build context path")
 	rootCmd.AddCommand(releaseCmd)
 }

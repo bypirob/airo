@@ -1,14 +1,18 @@
-name: airo
-container:
-  target_arch: linux/amd64
+images:
+  app:
+    base_image: node:24-alpine
+    target_arch: linux/amd64
 deploy:
-  port: 3000
-  app_port: 3000
-  env_file: "/etc/airo/app.env"
-  networks:
-    - "frontend"
-    - "backend"
   type: ssh
+  containers:
+    - name: "app"
+      image: "app"
+      port: 3000
+      app_port: 3000
+      env_file: "/etc/airo/app.env"
+      networks:
+        - "frontend"
+        - "backend"
   ssh:
     host: "192.168.1.100"
     user: "admin"

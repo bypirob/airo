@@ -8,18 +8,18 @@ import (
 	"bypirob/airo/src/internal/docker"
 )
 
-var pushTag string
-
 var pushCmd = &cobra.Command{
-	Use:   "push",
+	Use:   "push <tag>",
 	Short: "Push a Docker image",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := loadConfig()
 		if err != nil {
 			return err
 		}
 
-		if err := docker.PushImage(cfg, projectPath, pushTag); err != nil {
+		tag := args[0]
+		if err := docker.PushImage(cfg, projectPath, tag); err != nil {
 			return fmt.Errorf("push failed: %w", err)
 		}
 
@@ -28,6 +28,5 @@ var pushCmd = &cobra.Command{
 }
 
 func init() {
-	pushCmd.Flags().StringVar(&pushTag, "tag", "", "image tag (default: <name>:<yyyymmdd-hhmm>-<shortsha>)")
 	rootCmd.AddCommand(pushCmd)
 }

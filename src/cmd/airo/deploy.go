@@ -34,7 +34,7 @@ var deployCmd = &cobra.Command{
 }
 
 func init() {
-	deployCmd.Flags().StringVar(&deployTag, "tag", "", "image tag to deploy")
+	deployCmd.Flags().StringVar(&deployTag, "tag", "", "image tag suffix to deploy")
 	_ = deployCmd.MarkFlagRequired("tag")
 	rootCmd.AddCommand(deployCmd)
 }

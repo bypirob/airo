@@ -9,40 +9,34 @@ import (
 )
 
 const (
-	DefaultName       = "airo"
 	DefaultBaseImage  = "node:24-alpine"
 	DefaultTargetArch = "linux/amd64"
-	DefaultInstallCmd = "npm ci"
-	DefaultBuildCmd   = "npm run build"
-	DefaultStartCmd   = "npm start"
 )
 
 type Config struct {
-	Name      string          `yaml:"name"`
-	Container ContainerConfig `yaml:"container"`
-	Deploy    DeployConfig    `yaml:"deploy"`
+	Images map[string]ImageConfig `yaml:"images"`
+	Deploy DeployConfig           `yaml:"deploy"`
 }
 
-type ContainerConfig struct {
+type ImageConfig struct {
 	BaseImage  string `yaml:"base_image"`
 	TargetArch string `yaml:"target_arch"`
-	InstallCmd string `yaml:"install_cmd"`
-	BuildCmd   string `yaml:"build_cmd"`
-	StartCmd   string `yaml:"start_cmd"`
-	Port       int    `yaml:"port"`
-	AppPort    int    `yaml:"app_port"`
 }
 
 type DeployConfig struct {
-	Type     string         `yaml:"type"`
-	EnvFile  string         `yaml:"env_file"`
-	Networks []string       `yaml:"networks"`
-	SSH      SSHConfig      `yaml:"ssh"`
-	Registry RegistryConfig `yaml:"registry"`
+	Type       string            `yaml:"type"`
+	Containers []ContainerConfig `yaml:"containers"`
+	SSH        SSHConfig         `yaml:"ssh"`
+	Registry   RegistryConfig    `yaml:"registry"`
+}
 
-	// Legacy ports under deploy; mapped to container when set.
-	Port    int `yaml:"port"`
-	AppPort int `yaml:"app_port"`
+type ContainerConfig struct {
+	Name     string   `yaml:"name"`
+	Image    string   `yaml:"image"`
+	Port     int      `yaml:"port"`
+	AppPort  int      `yaml:"app_port"`
+	Networks []string `yaml:"networks"`
+	EnvFile  string   `yaml:"env_file"`
 }
 
 type SSHConfig struct {
@@ -85,30 +79,14 @@ func Load(projectPath, configPath string) (Config, error) {
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.Name == "" {
-		cfg.Name = DefaultName
-	}
-	if cfg.Container.BaseImage == "" {
-		cfg.Container.BaseImage = DefaultBaseImage
-	}
-	if cfg.Container.TargetArch == "" {
-		cfg.Container.TargetArch = DefaultTargetArch
-	}
-	if cfg.Container.InstallCmd == "" {
-		cfg.Container.InstallCmd = DefaultInstallCmd
-	}
-	if cfg.Container.BuildCmd == "" {
-		cfg.Container.BuildCmd = DefaultBuildCmd
-	}
-	if cfg.Container.StartCmd == "" {
-		cfg.Container.StartCmd = DefaultStartCmd
-	}
-
-	if cfg.Container.Port == 0 && cfg.Deploy.Port != 0 {
-		cfg.Container.Port = cfg.Deploy.Port
-	}
-	if cfg.Container.AppPort == 0 && cfg.Deploy.AppPort != 0 {
-		cfg.Container.AppPort = cfg.Deploy.AppPort
+	for name, image := range cfg.Images {
+		if image.BaseImage == "" {
+			image.BaseImage = DefaultBaseImage
+		}
+		if image.TargetArch == "" {
+			image.TargetArch = DefaultTargetArch
+		}
+		cfg.Images[name] = image
 	}
 }
 
@@ -129,8 +107,32 @@ func validate(cfg Config) error {
 		return fmt.Errorf("deploy.registry.repository is required for registry deploys")
 	}
 
-	if cfg.Container.Port != 0 && cfg.Container.AppPort == 0 {
-		return fmt.Errorf("container.app_port is required when container.port is set")
+	if len(cfg.Images) == 0 {
+		return fmt.Errorf("images is required")
+	}
+
+	if len(cfg.Deploy.Containers) == 0 {
+		return fmt.Errorf("deploy.containers is required")
+	}
+
+	seenNames := make(map[string]struct{}, len(cfg.Deploy.Containers))
+	for _, container := range cfg.Deploy.Containers {
+		if container.Name == "" {
+			return fmt.Errorf("deploy.containers.name is required")
+		}
+		if container.Image == "" {
+			return fmt.Errorf("deploy.containers.image is required")
+		}
+		if _, ok := cfg.Images[container.Image]; !ok {
+			return fmt.Errorf("deploy.containers.image %q is not defined in images", container.Image)
+		}
+		if _, exists := seenNames[container.Name]; exists {
+			return fmt.Errorf("deploy.containers.name %q must be unique", container.Name)
+		}
+		seenNames[container.Name] = struct{}{}
+		if container.Port != 0 && container.AppPort == 0 {
+			return fmt.Errorf("deploy.containers.app_port is required when deploy.containers.port is set")
+		}
 	}
 
 	return nil

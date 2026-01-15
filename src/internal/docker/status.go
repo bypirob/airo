@@ -8,31 +8,43 @@ import (
 )
 
 func Status(cfg config.Config) (string, error) {
-	running, err := dockerStatus(cfg, false)
-	if err != nil {
-		return "", err
+	anyRunning := false
+	anyFound := false
+	for _, container := range cfg.Deploy.Containers {
+		running, err := dockerStatus(cfg, container.Name, false)
+		if err != nil {
+			return "", err
+		}
+		if running != "" {
+			anyRunning = true
+			anyFound = true
+			continue
+		}
+
+		any, err := dockerStatus(cfg, container.Name, true)
+		if err != nil {
+			return "", err
+		}
+		if any != "" {
+			anyFound = true
+		}
 	}
-	if running != "" {
+
+	if anyRunning {
 		return "running", nil
 	}
-
-	any, err := dockerStatus(cfg, true)
-	if err != nil {
-		return "", err
-	}
-	if any != "" {
+	if anyFound {
 		return "stopped", nil
 	}
-
 	return "not found", nil
 }
 
-func dockerStatus(cfg config.Config, all bool) (string, error) {
+func dockerStatus(cfg config.Config, name string, all bool) (string, error) {
 	args := []string{"docker", "ps"}
 	if all {
 		args = append(args, "-a")
 	}
-	args = append(args, "--filter", fmt.Sprintf("name=^%s$", cfg.Name), "--format", "{{.Status}}")
+	args = append(args, "--filter", fmt.Sprintf("name=^%s$", name), "--format", "{{.Status}}")
 
 	cmd := sshCommand(cfg, args...)
 	output, err := cmd.Output()
